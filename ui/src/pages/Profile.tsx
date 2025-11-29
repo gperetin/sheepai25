@@ -5,11 +5,11 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { apiFetch } from "@/lib/api";
 import { Category } from "@/types/article";
 import { mockCategories } from "@/data/mockCategories";
+import { CategorySelector } from "@/components/CategorySelector";
 
 const Profile = () => {
   const navigate = useNavigate();
@@ -130,19 +130,11 @@ const Profile = () => {
                 <div className="text-center py-8 text-muted-foreground">Loading...</div>
               ) : (
                 <>
-                  <div className="flex flex-wrap gap-2">
-                    {categories.map((category) => (
-                      <Badge
-                        key={category.slug}
-                        variant={selectedTopics.includes(category.slug) ? "default" : "outline"}
-                        className="cursor-pointer transition-all hover:scale-105"
-                        onClick={() => toggleTopic(category.slug)}
-                        title={category.description}
-                      >
-                        {category.title}
-                      </Badge>
-                    ))}
-                  </div>
+                  <CategorySelector
+                    categories={categories}
+                    selectedSlugs={selectedTopics}
+                    onToggle={toggleTopic}
+                  />
 
                   <div className="space-y-2 pt-4 border-t">
                     <Label htmlFor="custom-description">Additional Preferences</Label>
