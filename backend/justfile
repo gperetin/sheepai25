@@ -3,3 +3,6 @@ run_scraping:
 
 generate_summaries:
     UV_ENV_FILE=.env uv run analyze.py
+
+run_scoring:
+     UV_ENV_FILE=.env uv run score.py
