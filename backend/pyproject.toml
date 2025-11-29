@@ -4,4 +4,7 @@ version = "0.0.1"
 description = "FTL2 news engine backend"
 readme = "README.md"
 requires-python = ">=3.13"
-dependencies = []
+dependencies = [
+    "aiosqlite>=0.21.0",
+    "apify-client>=2.3.0",
+]
