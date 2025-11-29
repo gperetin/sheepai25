@@ -1,0 +1,7 @@
+version = 1
+requires-python = ">=3.13"
+
+[[package]]
+name = "ftl2"
+version = "0.0.1"
+source = { virtual = "." }

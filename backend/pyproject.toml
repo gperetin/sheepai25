@@ -1,0 +1,7 @@
+[project]
+name = "ftl2"
+version = "0.0.1"
+description = "FTL2 news engine backend"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = []
