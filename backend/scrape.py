@@ -4,8 +4,64 @@ from apify_client import ApifyClientAsync
 import aiosqlite
 
 DB_PATH = "../data/db.sqlite"
-BATCH_SIZE = 20
+BATCH_SIZE = 5
 APIFY_ACTOR = "apify/website-content-crawler"
+GORANS_APIFY_ACTOR = "aYG0l9s7dbB7j3gbS"
+
+APIFY_RUN_INPUT = {
+    # "startUrls": [{ "url": "https://docs.apify.com/academy/web-scraping-for-beginners" }],
+    "useSitemaps": False,
+    "respectRobotsTxtFile": True,
+    "crawlerType": "playwright:adaptive",
+    "includeUrlGlobs": [],
+    "excludeUrlGlobs": [],
+    "keepUrlFragments": False,
+    "ignoreCanonicalUrl": False,
+    "ignoreHttpsErrors": False,
+    "maxCrawlDepth": 1,
+    "maxCrawlPages": 1,
+    "initialConcurrency": 0,
+    "maxConcurrency": 2,
+    "initialCookies": [],
+    "customHttpHeaders": {},
+    "signHttpRequests": False,
+    "pageFunction": "",
+    "proxyConfiguration": { "useApifyProxy": True },
+    "maxSessionRotations": 10,
+    "maxRequestRetries": 3,
+    "requestTimeoutSecs": 60,
+    "minFileDownloadSpeedKBps": 128,
+    "dynamicContentWaitSecs": 10,
+    "waitForSelector": "",
+    "softWaitForSelector": "",
+    "maxScrollHeightPixels": 5000,
+    "keepElementsCssSelector": "",
+    "removeElementsCssSelector": """nav, footer, script, style, noscript, svg, img[src^='data:'],
+[role=\"alert\"],
+[role=\"banner\"],
+[role=\"dialog\"],
+[role=\"alertdialog\"],
+[role=\"region\"][aria-label*=\"skip\" i],
+[aria-modal=\"true\"]""",
+    "removeCookieWarnings": True,
+    "blockMedia": True,
+    "expandIframes": True,
+    "clickElementsCssSelector": "[aria-expanded=\"false\"]",
+    "htmlTransformer": "readableText",
+    "readableTextCharThreshold": 100,
+    "aggressivePrune": False,
+    "debugMode": False,
+    "storeSkippedUrls": False,
+    "debugLog": False,
+    "saveHtml": False,
+    "saveHtmlAsFile": False,
+    "saveMarkdown": True,
+    "saveFiles": False,
+    "saveScreenshots": False,
+    "maxResults": 9999999,
+    "clientSideMinChangePercentage": 15,
+    "renderingTypeDetectionPercentage": 10,
+}
 
 
 async def get_links_to_crawl(db: aiosqlite.Connection) -> list[tuple[int, str]]:
@@ -15,7 +71,7 @@ async def get_links_to_crawl(db: aiosqlite.Connection) -> list[tuple[int, str]]:
         SELECT l.id, l.url
         FROM links l
         LEFT JOIN contents c ON l.id = c.link_id
-        WHERE c.id IS NULL
+        WHERE c.id IS NULL OR c.article IS NULL
         """
     )
     rows = await cursor.fetchall()
@@ -24,13 +80,11 @@ async def get_links_to_crawl(db: aiosqlite.Connection) -> list[tuple[int, str]]:
 
 async def crawl_url(client: ApifyClientAsync, url: str) -> str | None:
     """Crawl a single URL using Apify and return the article content."""
-    run_input = {
-        "startUrls": [{"url": url}],
-        "maxCrawlPages": 1,
-        "crawlerType": "cheerio",
-    }
 
-    run = await client.actor(APIFY_ACTOR).call(run_input=run_input)
+    run_input = APIFY_RUN_INPUT.copy()
+    run_input["startUrls"] = [{"url": url}]
+
+    run = await client.actor(GORANS_APIFY_ACTOR).call(run_input=run_input)
     dataset_id = run.get("defaultDatasetId")
 
     if not dataset_id:
@@ -40,7 +94,7 @@ async def crawl_url(client: ApifyClientAsync, url: str) -> str | None:
     items = dataset_items.items
 
     if items:
-        return items[0].get("text", "")
+        return items[0].get("markdown", None)
     return None
 
 
@@ -66,7 +120,11 @@ async def store_results(
     db: aiosqlite.Connection, results: list[tuple[int, str | None]]
 ) -> None:
     """Store crawl results in the contents table."""
+    #  ON CONFLICT (link_id) DO UPDATE SET article=excluded.article
     for link_id, article in results:
+        if article is None:
+            continue
+
         await db.execute(
             "INSERT INTO contents (link_id, article) VALUES (?, ?)",
             (link_id, article),
