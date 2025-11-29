@@ -2,10 +2,13 @@ import { useState, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { ChatMessage } from "@/types/article";
-import { Send, Bot, User } from "lucide-react";
+import { Send, Bot, User, AlertCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { apiFetch } from "@/lib/api";
+import { handleAPIResponse, getErrorMessage, APIError } from "@/lib/apiErrors";
+import { useToast } from "@/hooks/use-toast";
 
 interface ChatPanelProps {
   articleId: string;
@@ -15,38 +18,51 @@ export const ChatPanel = ({ articleId }: ChatPanelProps) => {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [isLoadingHistory, setIsLoadingHistory] = useState(true);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const { toast } = useToast();
 
   useEffect(() => {
     // Fetch chat history when article changes
     const fetchMessages = async () => {
+      setIsLoadingHistory(true);
+      setError(null);
+
       try {
         const response = await apiFetch(`/articles/${articleId}/chat/`);
+        const data = await handleAPIResponse(response);
 
-        if (response.ok) {
-          const data = await response.json();
-          setMessages(data);
-        } else {
-          // Mock initial message
+        setMessages(data);
+
+        // If no messages, add welcome message
+        if (data.length === 0) {
           setMessages([
             {
-              id: "1",
+              id: "welcome",
               role: "assistant",
               content: "Hi! I'm the FTL Bot. Ask me anything about this article and I'll help you understand it better.",
               timestamp: Date.now()
             }
           ]);
         }
-      } catch (error) {
-        // Mock initial message
-        setMessages([
-          {
-            id: "1",
-            role: "assistant",
-            content: "Hi! I'm the FTL Bot. Ask me anything about this article and I'll help you understand it better.",
-            timestamp: Date.now()
-          }
-        ]);
+      } catch (err) {
+        const errorMessage = getErrorMessage(err);
+        setError(errorMessage);
+
+        // For non-auth errors, show welcome message anyway (graceful degradation)
+        if (!(err instanceof APIError && err.statusCode === 401)) {
+          setMessages([
+            {
+              id: "welcome",
+              role: "assistant",
+              content: "Hi! I'm the FTL Bot. Ask me anything about this article and I'll help you understand it better.",
+              timestamp: Date.now()
+            }
+          ]);
+        }
+      } finally {
+        setIsLoadingHistory(false);
       }
     };
 
@@ -71,6 +87,7 @@ export const ChatPanel = ({ articleId }: ChatPanelProps) => {
     };
 
     setMessages(prev => [...prev, userMessage]);
+    const messageContent = input; // Capture before clearing
     setInput("");
     setIsLoading(true);
 
@@ -80,36 +97,36 @@ export const ChatPanel = ({ articleId }: ChatPanelProps) => {
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ message: input })
+        body: JSON.stringify({ message: messageContent })
       });
 
-      if (response.ok) {
-        const data = await response.json();
-        setMessages(prev => [...prev, {
-          id: (Date.now() + 1).toString(),
-          role: "assistant",
-          content: data.response,
-          timestamp: Date.now()
-        }]);
-      } else {
-        throw new Error("Failed to send message");
-      }
-    } catch (error) {
-      // Mock response
-      setTimeout(() => {
-        const mockResponse: ChatMessage = {
-          id: (Date.now() + 1).toString(),
-          role: "assistant",
-          content: "That's an interesting question about the article. Based on the content, I can provide some insights...",
-          timestamp: Date.now()
-        };
-        setMessages(prev => [...prev, mockResponse]);
-        setIsLoading(false);
-      }, 1000);
-      return;
-    }
+      const data = await handleAPIResponse(response);
 
-    setIsLoading(false);
+      setMessages(prev => [...prev, {
+        id: (Date.now() + 1).toString(),
+        role: "assistant",
+        content: data.response,
+        timestamp: Date.now()
+      }]);
+    } catch (err) {
+      const errorMessage = getErrorMessage(err);
+
+      // Show error message as system message
+      setMessages(prev => [...prev, {
+        id: (Date.now() + 1).toString(),
+        role: "assistant",
+        content: `I encountered an error: ${errorMessage}. Please try again.`,
+        timestamp: Date.now()
+      }]);
+
+      toast({
+        title: "Failed to send message",
+        description: errorMessage,
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handleKeyPress = (e: React.KeyboardEvent) => {
@@ -133,8 +150,24 @@ export const ChatPanel = ({ articleId }: ChatPanelProps) => {
         </div>
       </div>
 
+      {error && (
+        <div className="p-4">
+          <Alert variant="destructive">
+            <AlertCircle className="h-4 w-4" />
+            <AlertDescription className="text-xs">
+              Failed to load chat history: {error}
+            </AlertDescription>
+          </Alert>
+        </div>
+      )}
+
       <ScrollArea className="flex-1 p-4" ref={scrollRef}>
-        <div className="space-y-4">
+        {isLoadingHistory ? (
+          <div className="flex items-center justify-center py-8">
+            <div className="text-sm text-muted-foreground">Loading chat history...</div>
+          </div>
+        ) : (
+          <div className="space-y-4">
           {messages.map((message) => (
             <div
               key={message.id}
@@ -177,7 +210,8 @@ export const ChatPanel = ({ articleId }: ChatPanelProps) => {
               </div>
             </div>
           )}
-        </div>
+          </div>
+        )}
       </ScrollArea>
 
       <div className="p-4 border-t border-border">
