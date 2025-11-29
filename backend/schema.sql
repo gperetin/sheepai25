@@ -15,7 +15,13 @@ CREATE TABLE IF NOT EXISTS "analysis" (
 );
 CREATE TABLE IF NOT EXISTS "links" (
 	"id"	INTEGER NOT NULL,
+	"hn_id"	INTEGER UNIQUE,
 	"title"	TEXT,
 	"url"	TEXT,
+	"score"	INTEGER,
+	"time"	INTEGER,
+	"author"	TEXT,
+	"descendants"	INTEGER,
+	"hnlink"	TEXT,
 	PRIMARY KEY("id" AUTOINCREMENT)
 );

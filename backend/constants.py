@@ -1,3 +1,9 @@
+# Ingest configuration
+TOP_STORIES_LIMIT = 30  # Number of top stories to fetch from HN
+COMMENT_DEPTH = (
+    1  # Recursion depth for comments (0=top-level only, 1=top+replies, etc.)
+)
+
 CATEGORIES = [
     (
         "generative-ai-models",
