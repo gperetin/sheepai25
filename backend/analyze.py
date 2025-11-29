@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Analyze phase: Generate summaries of articles using LLM.
+Analyze phase: Generate summaries of articles and comments using LLM.
 """
 
 import asyncio
@@ -21,8 +21,16 @@ the article summary and that's it.
 Article:
 {{ article }}"""
 
+COMMENTS_SUMMARY_PROMPT = """
+Here is a dump of HackerNews comments with author names and timestamp. Summarize the comments
+in a 3-5 sentence summary. Don't mention any usernames. Ignore the irrelevant or tangential
+comments, just summarize the comments related to the article.
 
-async def get_contents_to_analyze(db: aiosqlite.Connection) -> list[tuple[int, str]]:
+Comments:
+{{ comments }}
+"""
+
+async def get_contents_to_analyze(db: aiosqlite.Connection) -> list[tuple[int, str, str]]:
     """
     Get contents that have articles but no analysis yet.
 
@@ -30,11 +38,11 @@ async def get_contents_to_analyze(db: aiosqlite.Connection) -> list[tuple[int, s
         db: Database connection
 
     Returns:
-        List of (content_id, article) tuples
+        List of (content_id, article, comments) tuples
     """
     cursor = await db.execute(
         """
-        SELECT c.id, c.article
+        SELECT c.id, c.article, c.comments
         FROM contents c
         LEFT JOIN analysis a ON a.content_id = c.id
         WHERE c.article IS NOT NULL
@@ -43,7 +51,7 @@ async def get_contents_to_analyze(db: aiosqlite.Connection) -> list[tuple[int, s
         """
     )
     rows = await cursor.fetchall()
-    return [(row[0], row[1]) for row in rows]
+    return [(row[0], row[1], row[2]) for row in rows]
 
 
 async def summarize_article(llm: LLM, article: str) -> str:
@@ -62,26 +70,32 @@ async def summarize_article(llm: LLM, article: str) -> str:
     return summary
 
 
-async def save_analysis(db: aiosqlite.Connection, content_id: int, summary: str) -> None:
+async def summarize_comments(llm: LLM, comments: str) -> str:
+    summary = await ask(llm, COMMENTS_SUMMARY_PROMPT, comments=comments)
+    return summary
+
+
+async def save_analysis(db: aiosqlite.Connection, content_id: int, article_summary: str, comments_summary: str) -> None:
     """
     Save the article summary to the analysis table.
 
     Args:
         db: Database connection
         content_id: ID of the content record
-        summary: Generated summary
+        article_summary: Generated article summary
+        comments_summary: Generated comments summary
     """
     await db.execute(
         """
-        INSERT INTO analysis (content_id, article_summary)
-        VALUES (?, ?)
+        INSERT INTO analysis (content_id, article_summary, comments_summary)
+        VALUES (?, ?, ?)
         """,
-        (content_id, summary),
+        (content_id, article_summary, comments_summary),
     )
     await db.commit()
 
 
-async def main():
+async def generate_summaries():
     """
     Main analysis procedure.
     """
@@ -100,15 +114,14 @@ async def main():
 
         analyzed_count = 0
         failed_count = 0
-
-        for i, (content_id, article) in enumerate(contents):
-            print(f"Analyzing article {i + 1}/{len(contents)}...")
-
+        for i, (content_id, article, comments) in enumerate(contents):
             try:
-                summary = await summarize_article(llm, article)
-                await save_analysis(db, content_id, summary)
+                article_summary, comments_summary = await asyncio.gather(
+                    summarize_article(llm, article),
+                    summarize_comments(llm, comments)
+                )
+                await save_analysis(db, content_id, article_summary, comments_summary)
                 analyzed_count += 1
-                print(f"  Summary: {summary[:100]}...")
             except Exception as e:
                 print(f"  Error: {e}")
                 failed_count += 1
@@ -122,4 +135,4 @@ async def main():
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    asyncio.run(generate_summaries())

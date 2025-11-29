@@ -1,0 +1,5 @@
+run_scraping:
+    UV_ENV_FILE=.env uv run scrape.py
+
+generate_summaries:
+    UV_ENV_FILE=.env uv run analyze.py
