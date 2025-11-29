@@ -51,6 +51,31 @@ class ArticleScores(LLMQuery):
     sentiment: float
 
 
+class ConfidenceScore(LLMQuery):
+    """Compare the original article content with a generated summary to assess accuracy.
+
+    ORIGINAL ARTICLE:
+    {{ article }}
+
+    GENERATED SUMMARY:
+    {{ summary }}
+
+    Evaluate how well the summary represents the original article content.
+    Provide a confidence score from 0 to 5 (floats allowed):
+
+    - 0 = The summary contains significant hallucinations or fabricated information not present in the article
+    - 1 = The summary has major inaccuracies or misrepresents key points from the article
+    - 2 = The summary has some inaccuracies or omits important information
+    - 3 = The summary is mostly accurate but may have minor omissions or imprecisions
+    - 4 = The summary accurately captures the main points with only trivial issues
+    - 5 = The summary faithfully and accurately represents the article content
+
+    Focus on factual accuracy: Does the summary make claims that are not supported by the article?
+    """
+
+    confidence: float
+
+
 async def get_unscored_contents(db: aiosqlite.Connection) -> list[dict]:
     """
     Fetch content entries that don't have scores yet.
@@ -59,11 +84,11 @@ async def get_unscored_contents(db: aiosqlite.Connection) -> list[dict]:
         db: Database connection
 
     Returns:
-        List of content dicts with article and comments
+        List of content dicts with article, comments, and article_summary
     """
     cursor = await db.execute(
         """
-        SELECT c.id, c.link_id, c.article, c.comments, l.title
+        SELECT c.id, c.link_id, c.article, c.comments, l.title, a.article_summary
         FROM contents c
         JOIN links l ON c.link_id = l.id
         LEFT JOIN analysis a ON c.id = a.content_id
@@ -80,6 +105,7 @@ async def get_unscored_contents(db: aiosqlite.Connection) -> list[dict]:
             "article": row[2],
             "comments": row[3],
             "title": row[4],
+            "article_summary": row[5],
         }
         for row in rows
     ]
@@ -89,6 +115,7 @@ async def save_scores(
     db: aiosqlite.Connection,
     content_id: int,
     scores: ArticleScores,
+    confidence: float | None = None,
 ) -> None:
     """
     Save scores to the analysis table.
@@ -97,12 +124,17 @@ async def save_scores(
         db: Database connection
         content_id: ID of the content entry
         scores: ArticleScores instance with the scores
+        confidence: Confidence score for the summary (0-5)
     """
-    scores_json = json.dumps({
+    scores_dict = {
         "controversial": scores.controversial,
         "trustworthy": scores.trustworthy,
         "sentiment": scores.sentiment,
-    })
+    }
+    if confidence is not None:
+        scores_dict["confidence"] = confidence
+
+    scores_json = json.dumps(scores_dict)
 
     # Check if analysis row exists
     cursor = await db.execute(
@@ -162,12 +194,42 @@ async def score_content(llm: LLM, content: dict) -> ArticleScores | None:
         return None
 
 
+async def compute_confidence(llm: LLM, content: dict) -> float | None:
+    """
+    Compute confidence score by comparing article content with its summary.
+
+    Args:
+        llm: LLM instance (Anthropic Claude)
+        content: Content dict with article and article_summary
+
+    Returns:
+        Confidence score (0-5) or None if computation failed
+    """
+    article = truncate_text(content["article"])
+    summary = content.get("article_summary")
+
+    if not article or not summary:
+        return None
+
+    try:
+        result = await ConfidenceScore.run(
+            llm,
+            article=article,
+            summary=summary,
+        )
+        return result.confidence
+    except Exception as e:
+        print(f"Error computing confidence for content {content['id']}: {e}")
+        return None
+
+
 async def main():
     """Main scoring procedure."""
     print("Starting scoring procedure...")
 
-    # Initialize LLM
-    llm = LLM.from_url("openai:///gpt-5-mini")
+    # Initialize LLMs
+    openai_llm = LLM.from_url("openai:///gpt-5-mini")
+    anthropic_llm = LLM.from_url("anthropic:///claude-sonnet-4-20250514")
 
     async with aiosqlite.connect(DB_PATH) as db:
         # Get unscored content
@@ -188,14 +250,19 @@ async def main():
                 f"(scored: {scored_count}, failed: {failed_count})"
             )
 
-            scores = await score_content(llm, content)
+            scores = await score_content(openai_llm, content)
 
             if scores:
-                await save_scores(db, content["id"], scores)
+                # Compute confidence score using Anthropic Claude
+                confidence = await compute_confidence(anthropic_llm, content)
+
+                await save_scores(db, content["id"], scores, confidence)
+                confidence_str = f"{confidence:.1f}" if confidence is not None else "N/A"
                 print(
                     f"  -> controversial: {scores.controversial:.1f}, "
                     f"trustworthy: {scores.trustworthy:.1f}, "
-                    f"sentiment: {scores.sentiment:.1f}"
+                    f"sentiment: {scores.sentiment:.1f}, "
+                    f"confidence: {confidence_str}"
                 )
                 scored_count += 1
             else:
