@@ -6,3 +6,6 @@ generate_summaries:
 
 run_scoring:
      UV_ENV_FILE=.env uv run score.py
+
+run_matching:
+    UV_ENV_FILE=.env uv run matcher.py
