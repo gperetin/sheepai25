@@ -1,11 +1,13 @@
 import os
 import uuid
 import random
+import time
 from datetime import datetime
 from typing import Optional, List
 from urllib.parse import urlparse
 
 import aiosqlite
+import bcrypt
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, Depends, Header
 from fastapi.middleware.cors import CORSMiddleware
@@ -31,14 +33,6 @@ app.add_middleware(
 
 # Database configuration
 DB_PATH = os.getenv("DB_PATH", "data.db")
-
-# Mock user storage (to be replaced with actual database later)
-# Structure: {email: {password, token, topics, customDescription}}
-MOCK_USERS = {}
-
-# Mock chat storage (to be replaced with actual database later)
-# Structure: {article_id: {user_email: [messages]}}
-MOCK_CHATS = {}
 
 
 # ============================================================================
@@ -189,19 +183,22 @@ def generate_token() -> str:
 
 
 def hash_password(password: str) -> str:
-    """Mock password hashing (replace with proper hashing later)."""
-    # TODO: Use bcrypt or similar in production
-    return f"hashed_{password}"
+    """Hash password using bcrypt."""
+    password_bytes = password.encode('utf-8')
+    salt = bcrypt.gensalt()
+    hashed = bcrypt.hashpw(password_bytes, salt)
+    return hashed.decode('utf-8')
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
-    """Mock password verification (replace with proper verification later)."""
-    # TODO: Use bcrypt or similar in production
-    return hashed_password == f"hashed_{plain_password}"
+    """Verify password against bcrypt hash."""
+    password_bytes = plain_password.encode('utf-8')
+    hashed_bytes = hashed_password.encode('utf-8')
+    return bcrypt.checkpw(password_bytes, hashed_bytes)
 
 
-async def get_current_user(authorization: Optional[str] = Header(None)) -> str:
-    """Dependency to validate bearer token and return user email."""
+async def get_current_user(authorization: Optional[str] = Header(None)) -> dict:
+    """Dependency to validate bearer token and return user data."""
     if not authorization:
         raise HTTPException(status_code=401, detail="Authorization header missing")
 
@@ -210,12 +207,22 @@ async def get_current_user(authorization: Optional[str] = Header(None)) -> str:
 
     token = authorization.replace("Bearer ", "")
 
-    # Find user by token
-    for email, user_data in MOCK_USERS.items():
-        if user_data.get("token") == token:
-            return email
+    # Find user by token in database
+    conn = await get_db_connection()
+    try:
+        query = "SELECT id, email, categories, custom_description, is_active FROM users WHERE token = ?"
+        async with conn.execute(query, (token,)) as cursor:
+            row = await cursor.fetchone()
+            if not row:
+                raise HTTPException(status_code=401, detail="Invalid or expired token")
 
-    raise HTTPException(status_code=401, detail="Invalid or expired token")
+            user = dict(row)
+            if not user["is_active"]:
+                raise HTTPException(status_code=401, detail="Account is inactive")
+
+            return user
+    finally:
+        await conn.close()
 
 
 # ============================================================================
@@ -322,36 +329,73 @@ def filter_articles_by_topics(articles: List[dict], topics: List[str]) -> List[d
 @app.post("/api/auth/register", status_code=201)
 async def register(request: RegisterRequest) -> LoginResponse:
     """Register a new user account."""
-    if request.email in MOCK_USERS:
-        raise HTTPException(status_code=409, detail="Email already registered")
+    conn = await get_db_connection()
+    try:
+        # Check if email already exists
+        async with conn.execute("SELECT id FROM users WHERE email = ?", (request.email,)) as cursor:
+            if await cursor.fetchone():
+                raise HTTPException(status_code=409, detail="Email already registered")
 
-    # Generate token for new user
-    token = generate_token()
+        # Generate token and hash password
+        token = generate_token()
+        password_hash = hash_password(request.password)
+        current_time = int(time.time())
 
-    # Store user in mock storage
-    MOCK_USERS[request.email] = {
-        "password": hash_password(request.password),
-        "token": token,
-        "topics": [],
-        "customDescription": "",
-    }
+        # Insert new user
+        await conn.execute(
+            """
+            INSERT INTO users (email, password_hash, token, is_active, is_email_verified,
+                             categories, custom_description, created_at, updated_at)
+            VALUES (?, ?, ?, 1, 1, '', '', ?, ?)
+            """,
+            (request.email, password_hash, token, current_time, current_time)
+        )
+        await conn.commit()
 
-    return LoginResponse(token=token)
+        return LoginResponse(token=token)
+    finally:
+        await conn.close()
 
 
 @app.post("/api/auth/login")
 async def login(request: LoginRequest) -> LoginResponse:
     """Authenticate user and return bearer token."""
-    user = MOCK_USERS.get(request.email)
+    conn = await get_db_connection()
+    try:
+        # Find user by email
+        async with conn.execute(
+            "SELECT id, password_hash, is_active FROM users WHERE email = ?",
+            (request.email,)
+        ) as cursor:
+            row = await cursor.fetchone()
 
-    if not user or not verify_password(request.password, user["password"]):
-        raise HTTPException(status_code=401, detail="Invalid credentials")
+        if not row:
+            raise HTTPException(status_code=401, detail="Invalid credentials")
 
-    # Generate new token
-    token = generate_token()
-    user["token"] = token
+        user = dict(row)
 
-    return LoginResponse(token=token)
+        # Check if account is active
+        if not user["is_active"]:
+            raise HTTPException(status_code=401, detail="Account is inactive")
+
+        # Verify password
+        if not verify_password(request.password, user["password_hash"]):
+            raise HTTPException(status_code=401, detail="Invalid credentials")
+
+        # Generate new token
+        token = generate_token()
+        current_time = int(time.time())
+
+        # Update user's token
+        await conn.execute(
+            "UPDATE users SET token = ?, updated_at = ? WHERE id = ?",
+            (token, current_time, user["id"])
+        )
+        await conn.commit()
+
+        return LoginResponse(token=token)
+    finally:
+        await conn.close()
 
 
 # ============================================================================
@@ -359,19 +403,21 @@ async def login(request: LoginRequest) -> LoginResponse:
 # ============================================================================
 
 @app.get("/api/profile/")
-async def get_profile(current_user: str = Depends(get_current_user)) -> ProfileResponse:
+async def get_profile(current_user: dict = Depends(get_current_user)) -> ProfileResponse:
     """Fetch user profile and preferences."""
-    user = MOCK_USERS[current_user]
+    # Parse categories from comma-separated string
+    topics = [t.strip() for t in current_user["categories"].split(",") if t.strip()]
+
     return ProfileResponse(
-        topics=user["topics"],
-        customDescription=user["customDescription"],
+        topics=topics,
+        customDescription=current_user["custom_description"] or "",
     )
 
 
 @app.post("/api/profile/")
 async def update_profile(
     request: ProfileUpdateRequest,
-    current_user: str = Depends(get_current_user)
+    current_user: dict = Depends(get_current_user)
 ):
     """Update user profile and preferences."""
     if not request.topics:
@@ -386,12 +432,22 @@ async def update_profile(
             detail=f"Invalid topics: {', '.join(invalid_topics)}"
         )
 
-    # Update user profile
-    user = MOCK_USERS[current_user]
-    user["topics"] = request.topics
-    user["customDescription"] = request.customDescription
+    # Update user profile in database
+    conn = await get_db_connection()
+    try:
+        # Convert topics list to comma-separated string
+        categories_str = ",".join(request.topics)
+        current_time = int(time.time())
 
-    return {"message": "Profile updated successfully"}
+        await conn.execute(
+            "UPDATE users SET categories = ?, custom_description = ?, updated_at = ? WHERE id = ?",
+            (categories_str, request.customDescription, current_time, current_user["id"])
+        )
+        await conn.commit()
+
+        return {"message": "Profile updated successfully"}
+    finally:
+        await conn.close()
 
 
 # ============================================================================
@@ -412,37 +468,97 @@ async def get_categories() -> List[CategoryResponse]:
 # ============================================================================
 
 @app.get("/api/articles/")
-async def get_articles(current_user: str = Depends(get_current_user)) -> List[ArticleResponse]:
+async def get_articles(current_user: dict = Depends(get_current_user)) -> List[ArticleResponse]:
     """Fetch all articles personalized for the user."""
-    user = MOCK_USERS[current_user]
-    user_topics = user["topics"]
+    # Parse user's topics from categories field
+    user_topics = [t.strip() for t in current_user["categories"].split(",") if t.strip()]
 
-    # Fetch all articles from database
-    articles = await get_all_articles()
-
-    # Filter by user's topics
-    filtered_articles = filter_articles_by_topics(articles, user_topics)
+    # Fetch articles that are available to this user from user_articles table
+    conn = await get_db_connection()
+    try:
+        query = """
+            SELECT
+                l.id,
+                l.hn_id,
+                l.title,
+                l.url,
+                l.score,
+                l.descendants,
+                l.hnlink,
+                c.article,
+                c.comments,
+                a.article_summary,
+                a.comments_summary,
+                ua.is_read
+            FROM user_articles ua
+            JOIN links l ON ua.article_id = l.id
+            LEFT JOIN contents c ON l.id = c.link_id
+            LEFT JOIN analysis a ON c.id = a.content_id
+            WHERE ua.user_id = ?
+            ORDER BY l.score DESC
+        """
+        async with conn.execute(query, (current_user["id"],)) as cursor:
+            rows = await cursor.fetchall()
+            articles = [dict(row) for row in rows]
+    finally:
+        await conn.close()
 
     # Map to response format
-    return [map_article_to_response(article, user_topics) for article in filtered_articles]
+    return [map_article_to_response(article, user_topics) for article in articles]
 
 
 @app.get("/api/articles/{article_id}/")
 async def get_article(
     article_id: str,
-    current_user: str = Depends(get_current_user)
+    current_user: dict = Depends(get_current_user)
 ) -> ArticleResponse:
     """Fetch detailed information for a specific article."""
-    user = MOCK_USERS[current_user]
-    user_topics = user["topics"]
+    # Parse user's topics from categories field
+    user_topics = [t.strip() for t in current_user["categories"].split(",") if t.strip()]
 
-    # Fetch article from database
-    article = await get_article_by_id(article_id)
+    conn = await get_db_connection()
+    try:
+        # Check if user has access to this article via user_articles
+        query = """
+            SELECT
+                l.id,
+                l.hn_id,
+                l.title,
+                l.url,
+                l.score,
+                l.descendants,
+                l.hnlink,
+                c.article,
+                c.comments,
+                a.article_summary,
+                a.comments_summary,
+                ua.id as user_article_id,
+                ua.is_read
+            FROM user_articles ua
+            JOIN links l ON ua.article_id = l.id
+            LEFT JOIN contents c ON l.id = c.link_id
+            LEFT JOIN analysis a ON c.id = a.content_id
+            WHERE ua.user_id = ? AND l.id = ?
+        """
+        async with conn.execute(query, (current_user["id"], article_id)) as cursor:
+            row = await cursor.fetchone()
 
-    if not article:
-        raise HTTPException(status_code=404, detail="Article not found")
+        if not row:
+            raise HTTPException(status_code=404, detail="Article not found or not accessible")
 
-    return map_article_to_response(article, user_topics)
+        article = dict(row)
+
+        # Mark article as read if not already read
+        if not article["is_read"]:
+            await conn.execute(
+                "UPDATE user_articles SET is_read = 1 WHERE id = ?",
+                (article["user_article_id"],)
+            )
+            await conn.commit()
+
+        return map_article_to_response(article, user_topics)
+    finally:
+        await conn.close()
 
 
 # ============================================================================
@@ -452,67 +568,99 @@ async def get_article(
 @app.get("/api/articles/{article_id}/chat/")
 async def get_chat_history(
     article_id: str,
-    current_user: str = Depends(get_current_user)
+    current_user: dict = Depends(get_current_user)
 ) -> List[ChatMessage]:
     """Fetch chat history for a specific article."""
-    # Get chat history for this article and user
-    if article_id not in MOCK_CHATS:
-        MOCK_CHATS[article_id] = {}
+    conn = await get_db_connection()
+    try:
+        # Get user_article_id for this user and article
+        async with conn.execute(
+            "SELECT id FROM user_articles WHERE user_id = ? AND article_id = ?",
+            (current_user["id"], article_id)
+        ) as cursor:
+            row = await cursor.fetchone()
 
-    if current_user not in MOCK_CHATS[article_id]:
-        MOCK_CHATS[article_id][current_user] = []
+        if not row:
+            raise HTTPException(status_code=404, detail="Article not found or not accessible")
 
-    return MOCK_CHATS[article_id][current_user]
+        user_article_id = row["id"]
+
+        # Fetch all messages for this user_article
+        query = """
+            SELECT id, role, content, timestamp
+            FROM messages
+            WHERE user_article_id = ?
+            ORDER BY timestamp ASC
+        """
+        async with conn.execute(query, (user_article_id,)) as cursor:
+            rows = await cursor.fetchall()
+            messages = [
+                ChatMessage(
+                    id=str(row["id"]),
+                    role=row["role"],
+                    content=row["content"],
+                    timestamp=row["timestamp"]
+                )
+                for row in rows
+            ]
+
+        return messages
+    finally:
+        await conn.close()
 
 
 @app.post("/api/articles/{article_id}/chat/send")
 async def send_chat_message(
     article_id: str,
     request: ChatMessageRequest,
-    current_user: str = Depends(get_current_user)
+    current_user: dict = Depends(get_current_user)
 ) -> ChatResponse:
     """Send a chat message and receive AI response."""
-    # Verify article exists
-    article = await get_article_by_id(article_id)
-    if not article:
-        raise HTTPException(status_code=404, detail="Article not found")
+    conn = await get_db_connection()
+    try:
+        # Get user_article_id and article title
+        query = """
+            SELECT ua.id as user_article_id, l.title
+            FROM user_articles ua
+            JOIN links l ON ua.article_id = l.id
+            WHERE ua.user_id = ? AND ua.article_id = ?
+        """
+        async with conn.execute(query, (current_user["id"], article_id)) as cursor:
+            row = await cursor.fetchone()
 
-    # Initialize chat storage if needed
-    if article_id not in MOCK_CHATS:
-        MOCK_CHATS[article_id] = {}
-    if current_user not in MOCK_CHATS[article_id]:
-        MOCK_CHATS[article_id][current_user] = []
+        if not row:
+            raise HTTPException(status_code=404, detail="Article not found or not accessible")
 
-    # Store user message
-    user_message = ChatMessage(
-        id=str(uuid.uuid4()),
-        role="user",
-        content=request.message,
-        timestamp=int(datetime.now().timestamp() * 1000),
-    )
-    MOCK_CHATS[article_id][current_user].append(user_message)
+        user_article_id = row["user_article_id"]
+        article_title = row["title"]
 
-    # Generate mock AI response
-    article_title = article["title"]
-    mock_responses = [
-        f"That's an interesting question about '{article_title}'. Based on the article, I can help you understand this topic better.",
-        f"Great question! Regarding '{article_title}', let me explain...",
-        f"From the article '{article_title}', we can see that this is a complex topic. Here's what you need to know...",
-        f"I'd be happy to discuss '{article_title}' with you. The key points to consider are...",
-    ]
+        # Store user message
+        current_timestamp = int(datetime.now().timestamp() * 1000)
+        await conn.execute(
+            "INSERT INTO messages (user_article_id, role, content, timestamp) VALUES (?, ?, ?, ?)",
+            (user_article_id, "user", request.message, current_timestamp)
+        )
 
-    ai_response_text = random.choice(mock_responses)
+        # Generate mock AI response
+        mock_responses = [
+            f"That's an interesting question about '{article_title}'. Based on the article, I can help you understand this topic better.",
+            f"Great question! Regarding '{article_title}', let me explain...",
+            f"From the article '{article_title}', we can see that this is a complex topic. Here's what you need to know...",
+            f"I'd be happy to discuss '{article_title}' with you. The key points to consider are...",
+        ]
+        ai_response_text = random.choice(mock_responses)
 
-    # Store AI response
-    ai_message = ChatMessage(
-        id=str(uuid.uuid4()),
-        role="assistant",
-        content=ai_response_text,
-        timestamp=int(datetime.now().timestamp() * 1000),
-    )
-    MOCK_CHATS[article_id][current_user].append(ai_message)
+        # Store AI response
+        await conn.execute(
+            "INSERT INTO messages (user_article_id, role, content, timestamp) VALUES (?, ?, ?, ?)",
+            (user_article_id, "assistant", ai_response_text, current_timestamp + 1)
+        )
 
-    return ChatResponse(response=ai_response_text)
+        await conn.commit()
+
+        return ChatResponse(response=ai_response_text)
+    finally:
+        await conn.close()
 
 
 # ============================================================================
@@ -537,4 +685,4 @@ async def startup_event():
     """Initialize the application on startup."""
     print(f"FTL News API starting...")
     print(f"Database: {DB_PATH}")
-    print(f"Mock authentication enabled (replace with real auth later)")
+    print(f"Database-backed authentication enabled")
