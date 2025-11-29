@@ -1,7 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { ChatMessage } from "@/types/article";
 import { Send, Bot, User, AlertCircle } from "lucide-react";
@@ -70,10 +69,12 @@ export const ChatPanel = ({ articleId }: ChatPanelProps) => {
   }, [articleId]);
 
   useEffect(() => {
-    // Auto-scroll to bottom
-    if (scrollRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
-    }
+    // Auto-scroll to bottom after render completes
+    requestAnimationFrame(() => {
+      if (scrollRef.current) {
+        scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+      }
+    });
   }, [messages]);
 
   const handleSend = async () => {
@@ -161,7 +162,7 @@ export const ChatPanel = ({ articleId }: ChatPanelProps) => {
         </div>
       )}
 
-      <ScrollArea className="flex-1 p-4" ref={scrollRef}>
+      <div className="flex-1 overflow-y-auto p-4" ref={scrollRef}>
         {isLoadingHistory ? (
           <div className="flex items-center justify-center py-8">
             <div className="text-sm text-muted-foreground">Loading chat history...</div>
@@ -212,7 +213,7 @@ export const ChatPanel = ({ articleId }: ChatPanelProps) => {
           )}
           </div>
         )}
-      </ScrollArea>
+      </div>
 
       <div className="p-4 border-t border-border">
         <div className="flex gap-2">

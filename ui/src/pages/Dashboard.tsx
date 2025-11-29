@@ -122,7 +122,7 @@ const Dashboard = () => {
         </div>
 
         {/* Chat Panel - Right Pane */}
-        <div className="w-96 border-l border-border bg-card">
+        <div className="w-96 border-l border-border bg-card h-full overflow-hidden">
           {selectedArticle ? (
             <ChatPanel articleId={selectedArticle.id} />
           ) : (
