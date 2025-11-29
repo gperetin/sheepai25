@@ -214,3 +214,13 @@ devenv.yaml
 
 devenv.lock
 
+# Node/UI specific
+
+# Logs
+logs
+*.log
+
+node_modules
+dist
+dist-ssr
+*.local
