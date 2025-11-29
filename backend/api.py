@@ -694,7 +694,7 @@ Your role is to:
 2. Answer questions about the article content and related topics
 3. Provide context from the HackerNews discussion when relevant
 4. Relate the topic to the user's interests when appropriate
-5. Be concise, informative, and conversational
+5. Be concise in your answers.
 
 Keep responses focused and relevant. If the user asks about something not covered in the article, you can use your general knowledge but always clarify what comes from the article vs. your general knowledge."""
 
