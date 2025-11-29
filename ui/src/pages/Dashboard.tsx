@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 import { Header } from "@/components/dashboard/Header";
 import { ArticleList } from "@/components/dashboard/ArticleList";
 import { ArticleDetail } from "@/components/dashboard/ArticleDetail";
@@ -12,6 +12,7 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { useToast } from "@/hooks/use-toast";
 
 const Dashboard = () => {
+  const { id: articleId } = useParams<{ id?: string }>();
   const [selectedArticle, setSelectedArticle] = useState<Article | null>(null);
   const [articles, setArticles] = useState<Article[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -30,9 +31,28 @@ const Dashboard = () => {
 
         setArticles(data);
 
-        // Auto-select first article if available
-        if (data.length > 0 && !selectedArticle) {
-          setSelectedArticle(data[0]);
+        // If an article ID is provided in the URL, try to select that article
+        if (articleId) {
+          const article = data.find(a => a.id === articleId);
+          if (article) {
+            setSelectedArticle(article);
+          } else {
+            // Article not found in the list
+            toast({
+              title: "Article not found",
+              description: `Could not find article with ID: ${articleId}`,
+              variant: "destructive",
+            });
+            // Optionally select the first article as fallback
+            if (data.length > 0) {
+              setSelectedArticle(data[0]);
+            }
+          }
+        } else {
+          // Auto-select first article if available and no article is selected
+          if (data.length > 0 && !selectedArticle) {
+            setSelectedArticle(data[0]);
+          }
         }
       } catch (err) {
         const errorMessage = getErrorMessage(err);
@@ -53,12 +73,17 @@ const Dashboard = () => {
     };
 
     fetchArticles();
-  }, []);
+  }, [articleId]);
+
+  const handleSelectArticle = (article: Article) => {
+    setSelectedArticle(article);
+    navigate(`/article/${article.id}`, { replace: true });
+  };
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
       <Header />
-      
+
       <main className="flex-1 flex overflow-hidden">
         {/* Article List - Left Pane */}
         <div className="w-80 border-r border-border bg-card overflow-y-auto">
@@ -79,7 +104,7 @@ const Dashboard = () => {
             <ArticleList
               articles={articles}
               selectedArticle={selectedArticle}
-              onSelectArticle={setSelectedArticle}
+              onSelectArticle={handleSelectArticle}
               isLoading={isLoading}
             />
           )}
