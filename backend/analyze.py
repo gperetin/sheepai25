@@ -103,13 +103,14 @@ async def save_analysis(db: aiosqlite.Connection, content_id: int, article_summa
         content_id: ID of the content record
         article_summary: Generated article summary
         comments_summary: Generated comments summary
+        categories: Selected categories for the article
     """
     await db.execute(
         """
-        INSERT INTO analysis (content_id, article_summary, comments_summary)
-        VALUES (?, ?, ?)
+        INSERT INTO analysis (content_id, article_summary, comments_summary, categories)
+        VALUES (?, ?, ?, ?)
         """,
-        (content_id, article_summary, comments_summary),
+        (content_id, article_summary, comments_summary, categories),
     )
     await db.commit()
 
