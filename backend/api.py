@@ -524,6 +524,8 @@ async def get_articles(
             LEFT JOIN contents c ON l.id = c.link_id
             LEFT JOIN analysis a ON c.id = a.content_id
             WHERE ua.user_id = ?
+                AND ua.matched_categories IS NOT NULL
+                AND ua.matched_categories != '[]'
             ORDER BY l.score DESC
         """
         async with conn.execute(query, (current_user["id"],)) as cursor:
@@ -569,6 +571,8 @@ async def get_article(
             LEFT JOIN contents c ON l.id = c.link_id
             LEFT JOIN analysis a ON c.id = a.content_id
             WHERE ua.user_id = ? AND l.id = ?
+                AND ua.matched_categories IS NOT NULL
+                AND ua.matched_categories != '[]'
         """
         async with conn.execute(query, (current_user["id"], article_id)) as cursor:
             row = await cursor.fetchone()

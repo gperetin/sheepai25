@@ -10,6 +10,7 @@ Usage:
     uv run python digest.py
 """
 
+import json
 import sqlite3
 from os import environ
 from logging import getLogger, basicConfig, INFO
@@ -99,6 +100,8 @@ def get_unsent_articles_for_user(user_id: int) -> List[Dict[str, Any]]:
         LEFT JOIN contents c ON l.id = c.link_id
         LEFT JOIN analysis a ON c.id = a.content_id
         WHERE ua.user_id = ? AND ua.is_sent = 0
+            AND ua.matched_categories IS NOT NULL
+            AND ua.matched_categories != '[]'
         ORDER BY ua.relevance_score DESC
     """
 
@@ -138,16 +141,20 @@ def generate_html_email(user_email: str, articles: List[Dict[str, Any]]) -> str:
         # Format matched categories as tags
         categories_html = ""
         if matched_categories:
-            categories = matched_categories.split(",")
-            category_tags = []
-            for cat in categories[:3]:  # Show max 3 categories
-                cat_display = cat.strip().replace("-", " ").title()
-                category_tags.append(
-                    f'<span style="display: inline-block; background-color: #e8f4f8; color: #0066cc; '
-                    f"padding: 4px 8px; border-radius: 4px; font-size: 12px; margin-right: 4px; "
-                    f'margin-bottom: 4px;">{cat_display}</span>'
-                )
-            categories_html = "".join(category_tags)
+            try:
+                categories = json.loads(matched_categories)
+                category_tags = []
+                for cat in categories[:3]:  # Show max 3 categories
+                    cat_display = cat.strip().replace("-", " ").title()
+                    category_tags.append(
+                        f'<span style="display: inline-block; background-color: #e8f4f8; color: #0066cc; '
+                        f"padding: 4px 8px; border-radius: 4px; font-size: 12px; margin-right: 4px; "
+                        f'margin-bottom: 4px;">{cat_display}</span>'
+                    )
+                categories_html = "".join(category_tags)
+            except (json.JSONDecodeError, TypeError):
+                # If parsing fails, skip categories display
+                pass
 
         # Truncate summary if too long
         if summary and len(summary) > 300:
@@ -264,6 +271,32 @@ def mark_articles_as_sent(user_article_ids: List[int]) -> None:
     log.info(f"Marked {len(user_article_ids)} articles as sent")
 
 
+def mark_empty_categories_as_sent(user_id: int) -> None:
+    """
+    Mark articles with NULL or empty matched_categories as sent without including them in digest.
+
+    Args:
+        user_id: The user's ID
+    """
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    query = """
+        UPDATE user_articles
+        SET is_sent = 1
+        WHERE user_id = ? AND is_sent = 0
+            AND (matched_categories IS NULL OR matched_categories = '[]')
+    """
+
+    cursor.execute(query, (user_id,))
+    rows_affected = cursor.rowcount
+    conn.commit()
+    conn.close()
+
+    if rows_affected > 0:
+        log.info(f"Marked {rows_affected} articles with empty categories as sent for user {user_id}")
+
+
 def send_digest_to_user(
     user_id: int, user_data: Dict[str, Any], articles: List[Dict[str, Any]]
 ) -> bool:
@@ -294,6 +327,9 @@ def send_digest_to_user(
         # Mark articles as sent
         user_article_ids = [article["user_article_id"] for article in articles]
         mark_articles_as_sent(user_article_ids)
+
+        # Mark articles with NULL or empty matched_categories as sent
+        mark_empty_categories_as_sent(user_id)
 
         log.info(f"Successfully sent digest to {email} with {article_count} articles")
         return True
