@@ -184,10 +184,6 @@ def generate_html_email(user_email: str, articles: List[Dict[str, Any]]) -> str:
                    style="color: #0066cc; text-decoration: none; font-weight: 500; margin-right: 16px;">
                     Read Article &rarr;
                 </a>
-                <a href="{hnlink}"
-                   style="color: #666666; text-decoration: none; font-size: 14px;">
-                    HN Discussion
-                </a>
             </div>
         </div>
         """
@@ -232,7 +228,7 @@ def generate_html_email(user_email: str, articles: List[Dict[str, Any]]) -> str:
                         This digest was sent to {user_email}
                     </p>
                     <p style="margin: 0;">
-                        <a href="{APP_BASE_URL}/settings"
+                        <a href="{APP_BASE_URL}/profile"
                            style="color: #0066cc; text-decoration: none;">
                             Manage your preferences
                         </a>
