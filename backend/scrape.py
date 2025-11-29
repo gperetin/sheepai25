@@ -70,8 +70,8 @@ async def get_links_to_crawl(db: aiosqlite.Connection) -> list[tuple[int, str]]:
         """
         SELECT l.id, l.url
         FROM links l
-        LEFT JOIN contents c ON l.id = c.link_id
-        WHERE c.id IS NULL OR c.article IS NULL
+        JOIN contents c ON l.id = c.link_id
+        WHERE c.article IS NULL
         """
     )
     rows = await cursor.fetchall()
@@ -84,7 +84,7 @@ async def crawl_url(client: ApifyClientAsync, url: str) -> str | None:
     run_input = APIFY_RUN_INPUT.copy()
     run_input["startUrls"] = [{"url": url}]
 
-    run = await client.actor(GORANS_APIFY_ACTOR).call(run_input=run_input)
+    run = await client.actor(GORANS_APIFY_ACTOR).call(run_input=run_input, memory_mbytes=2048)
     dataset_id = run.get("defaultDatasetId")
 
     if not dataset_id:
@@ -120,14 +120,13 @@ async def store_results(
     db: aiosqlite.Connection, results: list[tuple[int, str | None]]
 ) -> None:
     """Store crawl results in the contents table."""
-    #  ON CONFLICT (link_id) DO UPDATE SET article=excluded.article
     for link_id, article in results:
         if article is None:
             continue
 
         await db.execute(
-            "INSERT INTO contents (link_id, article) VALUES (?, ?)",
-            (link_id, article),
+            "UPDATE contents SET article = ? WHERE link_id = ?",
+            (article, link_id),
         )
     await db.commit()
 
