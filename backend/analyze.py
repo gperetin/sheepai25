@@ -9,6 +9,7 @@ import os
 import aiosqlite
 from dotenv import load_dotenv
 from think import LLM, ask
+from constants import CATEGORIES
 
 load_dotenv()
 
@@ -28,6 +29,18 @@ comments, just summarize the comments related to the article.
 
 Comments:
 {{ comments }}
+"""
+
+CATEGORIZATION_PROMPT = """
+I have a text of an article and a set of predefined categories. I'd like you to analyze the
+article text and give me a list of the categories that this article belongs to.
+Return just the category slugs, as a comma-delimited list, nothing else.
+
+Here are the categories, in the format: (slug, description)
+{{ categories }}
+
+Here is the text of the article:
+{{ article }}
 """
 
 async def get_contents_to_analyze(db: aiosqlite.Connection) -> list[tuple[int, str, str]]:
@@ -75,7 +88,13 @@ async def summarize_comments(llm: LLM, comments: str) -> str:
     return summary
 
 
-async def save_analysis(db: aiosqlite.Connection, content_id: int, article_summary: str, comments_summary: str) -> None:
+async def categorize(llm: LLM, article: str, categories: list) -> str:
+    cats_str = "\n".join([f"({t[0]}, {t[1]})" for t in categories])
+    categories = await ask(llm, CATEGORIZATION_PROMPT, article=article, categories=cats_str)
+    return categories
+
+
+async def save_analysis(db: aiosqlite.Connection, content_id: int, article_summary: str, comments_summary: str, categories: str) -> None:
     """
     Save the article summary to the analysis table.
 
@@ -99,6 +118,10 @@ async def generate_summaries():
     """
     Main analysis procedure.
     """
+
+    # Extract just the slug and description from categories.
+    categories = [(c[0], c[2]) for c in CATEGORIES]
+
     print("Starting article analysis...")
 
     llm = LLM.from_url("openai:///gpt-5-nano")
@@ -116,11 +139,12 @@ async def generate_summaries():
         failed_count = 0
         for i, (content_id, article, comments) in enumerate(contents):
             try:
-                article_summary, comments_summary = await asyncio.gather(
+                article_summary, comments_summary, selected_categories = await asyncio.gather(
                     summarize_article(llm, article),
-                    summarize_comments(llm, comments)
+                    summarize_comments(llm, comments),
+                    categorize(llm, article, categories)
                 )
-                await save_analysis(db, content_id, article_summary, comments_summary)
+                await save_analysis(db, content_id, article_summary, comments_summary, selected_categories)
                 analyzed_count += 1
             except Exception as e:
                 print(f"  Error: {e}")
