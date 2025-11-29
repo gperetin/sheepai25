@@ -78,6 +78,7 @@ class ArticleResponse(BaseModel):
     relevanceScore: float
     trustworthinessScore: float
     controversyScore: float
+    confidenceScore: float
     summary: str
     commentsSummary: str
     articleUrl: str
@@ -261,6 +262,7 @@ def parse_scores_from_json(scores_json: Optional[str]) -> dict:
         "controversial": 0.0,
         "trustworthy": 0.0,
         "sentiment": 0.0,
+        "confidence": 0.0,
     }
 
     # If no scores data, return defaults
@@ -274,6 +276,7 @@ def parse_scores_from_json(scores_json: Optional[str]) -> dict:
             "controversial": scores_data.get("controversial", 0.0),
             "trustworthy": scores_data.get("trustworthy", 0.0),
             "sentiment": scores_data.get("sentiment", 0.0),
+            "confidence": scores_data.get("confidence", 0.0),
         }
     except (json.JSONDecodeError, AttributeError, TypeError):
         # If JSON parsing fails, return defaults
@@ -287,11 +290,12 @@ def get_real_scores(scores_json: Optional[str], relevance_score: Optional[float]
 
     # Map database fields to API response format
     # Use relevance_score from user_articles table (user-specific matching)
-    # Use trustworthy and controversial from analysis scores JSON
+    # Use trustworthy, controversial, and confidence from analysis scores JSON
     return {
         "relevanceScore": round(relevance_score or 0.0, 1),
         "trustworthinessScore": round(parsed_scores["trustworthy"], 1),
         "controversyScore": round(parsed_scores["controversial"], 1),
+        "confidenceScore": round(parsed_scores["confidence"], 1),
     }
 
 
@@ -321,6 +325,7 @@ def map_article_to_response(
         relevanceScore=scores["relevanceScore"],
         trustworthinessScore=scores["trustworthinessScore"],
         controversyScore=scores["controversyScore"],
+        confidenceScore=scores["confidenceScore"],
         summary=article_summary,
         commentsSummary=comments_summary,
         articleUrl=article_data["url"] or article_data["hnlink"],
