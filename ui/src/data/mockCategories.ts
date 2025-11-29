@@ -2,153 +2,153 @@ import { Category } from "@/types/article";
 
 export const mockCategories: Category[] = [
   {
-    slug: "ai-machine-learning",
-    title: "AI & Machine Learning",
-    description: "Artificial intelligence and machine learning topics"
+    slug: "generative-ai-models",
+    title: "Generative AI Models & Releases",
+    description: "Updates on major foundational models, including GPT-4o, Gemini, Claude 3, Llama 3, and Stable Diffusion."
   },
   {
-    slug: "web-development",
-    title: "Web Development",
-    description: "Web development technologies and frameworks"
-  },
-  {
-    slug: "mobile-development",
-    title: "Mobile Development",
-    description: "Mobile app development for iOS and Android"
-  },
-  {
-    slug: "devops-cloud",
-    title: "DevOps & Cloud",
-    description: "Cloud infrastructure and DevOps practices"
-  },
-  {
-    slug: "security-privacy",
-    title: "Security & Privacy",
-    description: "Cybersecurity and privacy topics"
-  },
-  {
-    slug: "databases",
-    title: "Databases",
-    description: "Database systems and data storage"
+    slug: "ai-tools-applications",
+    title: "AI Tools & Applications",
+    description: "Practical implementations of AI, such as coding assistants, local LLM runners, text-to-speech engines, and image generation interfaces."
   },
   {
     slug: "programming-languages",
     title: "Programming Languages",
-    description: "Programming language updates and discussions"
+    description: "Discussions on language updates and comparisons, covering Python, Rust, C++, Go, Mojo, and TypeScript."
   },
   {
-    slug: "open-source",
-    title: "Open Source",
-    description: "Open source software and projects"
+    slug: "software-engineering-devops",
+    title: "Software Engineering & DevOps",
+    description: "Topics related to development workflows, version control (Git), databases (Postgres, SQLite), debugging, and system architecture."
   },
   {
-    slug: "startups-business",
-    title: "Startups & Business",
-    description: "Startup culture and business topics"
+    slug: "web-development-browsers",
+    title: "Web Development & Browsers",
+    description: "News regarding web standards, browser engines (Firefox, Chrome, Ladybird), and frontend technologies like CSS, HTML, and htmx."
   },
   {
-    slug: "cryptocurrency-blockchain",
-    title: "Cryptocurrency & Blockchain",
-    description: "Blockchain technology and cryptocurrencies"
+    slug: "open-source-community",
+    title: "Open Source Community",
+    description: "Conversations about project forks (OpenTF, Valkey), maintainer challenges, licensing debates, and community-driven tools."
   },
   {
-    slug: "data-science",
-    title: "Data Science",
-    description: "Data analysis and data science topics"
+    slug: "operating-systems",
+    title: "Operating Systems",
+    description: "Updates on kernels and OS distributions, including Linux, Windows 11, macOS, and niche projects like Asahi Linux or SerenityOS."
   },
   {
-    slug: "system-design",
-    title: "System Design",
-    description: "Software architecture and system design"
+    slug: "cybersecurity-incidents",
+    title: "Cybersecurity Incidents",
+    description: "Reports on major security breaches, backdoors (XZ Utils), data leaks (23andMe), and supply chain attacks."
   },
   {
-    slug: "backend-engineering",
-    title: "Backend Engineering",
-    description: "Backend development and server-side topics"
+    slug: "hacking-security-research",
+    title: "Hacking & Security Research",
+    description: "Technical discussions on exploits, reverse engineering, penetration testing, and security hardware like Flipper Zero."
   },
   {
-    slug: "frontend-engineering",
-    title: "Frontend Engineering",
-    description: "Frontend development and UI frameworks"
+    slug: "privacy-encryption",
+    title: "Privacy & Encryption",
+    description: "News regarding surveillance, end-to-end encryption tools (Signal), and privacy regulations like Chat Control."
   },
   {
-    slug: "product-management",
-    title: "Product Management",
-    description: "Product management and strategy"
+    slug: "big-tech-corporate-news",
+    title: "Big Tech Corporate News",
+    description: "Updates on major technology companies, including antitrust lawsuits, board conflicts, and major acquisitions."
   },
   {
-    slug: "design-ux",
-    title: "Design & UX",
-    description: "User experience and design topics"
+    slug: "work-career-management",
+    title: "Work, Career & Management",
+    description: "Discussions on the tech labor market, return-to-office mandates, layoffs, and hiring practices."
   },
   {
-    slug: "career-jobs",
-    title: "Career & Jobs",
-    description: "Career development and job opportunities"
+    slug: "startups-venture-capital",
+    title: "Startups & Venture Capital",
+    description: "Stories about founder experiences, fundraising, Y Combinator, and the startup ecosystem."
   },
   {
-    slug: "remote-work",
-    title: "Remote Work",
-    description: "Remote work culture and practices"
+    slug: "media-copyright-content",
+    title: "Media, Copyright & Content",
+    description: "Debates on digital rights, AI copyright infringement (NYT vs. OpenAI), piracy, and streaming service policies."
   },
   {
-    slug: "productivity",
-    title: "Productivity",
-    description: "Productivity tools and techniques"
+    slug: "semiconductors-chips",
+    title: "Semiconductors & Chips",
+    description: "News on hardware manufacturing and design, covering Apple Silicon, Nvidia GPUs, TSMC, and RISC-V."
   },
   {
-    slug: "hardware-iot",
-    title: "Hardware & IoT",
-    description: "Hardware development and Internet of Things"
+    slug: "consumer-electronics",
+    title: "Consumer Electronics",
+    description: "Launches and discussions of consumer hardware, including smartphones, VR/AR headsets, and Right to Repair initiatives."
   },
   {
-    slug: "gaming",
-    title: "Gaming",
-    description: "Game development and gaming industry"
+    slug: "space-exploration",
+    title: "Space Exploration",
+    description: "Updates on aerospace missions, including SpaceX Starship, Voyager, the James Webb Telescope, and lunar landings."
   },
   {
-    slug: "science-research",
-    title: "Science & Research",
-    description: "Scientific research and discoveries"
+    slug: "physics-materials",
+    title: "Physics & Materials",
+    description: "Scientific breakthroughs and debates, such as the LK-99 superconductor saga, fusion energy, and battery technology."
   },
   {
-    slug: "climate-tech",
-    title: "Climate Tech",
-    description: "Climate technology and sustainability"
+    slug: "health-biotech-medicine",
+    title: "Health, Biotech & Medicine",
+    description: "Developments in medical research, gene therapy, mental health studies, and disease eradication."
   },
   {
-    slug: "biotech",
-    title: "Biotech",
-    description: "Biotechnology and life sciences"
+    slug: "mathematics-theory",
+    title: "Mathematics & Theory",
+    description: "Discussions on algorithmic breakthroughs, mathematical puzzles, scientific papers, and data visualization."
   },
   {
-    slug: "space-astronomy",
-    title: "Space & Astronomy",
-    description: "Space exploration and astronomy"
+    slug: "law-policy-regulation",
+    title: "Law, Policy & Regulation",
+    description: "News on government legislation affecting tech, such as the EU AI Act, FCC rulings, and Net Neutrality."
   },
   {
-    slug: "politics-society",
-    title: "Politics & Society",
-    description: "Political and societal discussions"
+    slug: "geopolitics-global-affairs",
+    title: "Geopolitics & Global Affairs",
+    description: "Discussions on how international conflicts, sanctions, and government censorship intersect with technology."
   },
   {
-    slug: "education",
-    title: "Education",
-    description: "Educational topics and learning"
+    slug: "transportation-infrastructure",
+    title: "Transportation & Infrastructure",
+    description: "Reports on vehicle safety (Boeing), electric vehicle adoption, and public infrastructure projects."
   },
   {
-    slug: "books-writing",
-    title: "Books & Writing",
-    description: "Literature and writing topics"
+    slug: "environment-energy",
+    title: "Environment & Energy",
+    description: "Topics concerning climate change, renewable energy sources, and nuclear power developments."
   },
   {
-    slug: "philosophy",
-    title: "Philosophy",
-    description: "Philosophical discussions and ideas"
+    slug: "obituaries",
+    title: "Obituaries",
+    description: "Tributes to recently deceased notable figures in the tech and science communities."
   },
   {
-    slug: "general-tech-news",
-    title: "General Tech News",
-    description: "General technology news and updates"
+    slug: "gaming-game-dev",
+    title: "Gaming & Game Dev",
+    description: "News on game engines (Unity, Godot), game development culture, and retro gaming ports."
+  },
+  {
+    slug: "graphics-design-ui-ux",
+    title: "Graphics, Design & UI/UX",
+    description: "Updates on design tools (Blender), font creation, 3D rendering, and user interface trends."
+  },
+  {
+    slug: "retro-computing-history",
+    title: "Retro Computing & History",
+    description: "Posts dedicated to vintage hardware restoration, historical codebases, and the history of computing."
+  },
+  {
+    slug: "show-hn-projects",
+    title: '"Show HN" Projects',
+    description: "Community submissions where creators share their own tools, apps, and side projects for feedback."
+  },
+  {
+    slug: "ask-hn-community-meta",
+    title: '"Ask HN" & Community Meta',
+    description: "Internal community discussions, including technical questions, career advice, and site announcements."
   }
 ];
