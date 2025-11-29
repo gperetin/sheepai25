@@ -2,6 +2,7 @@ import os
 import uuid
 import random
 import time
+import json
 from datetime import datetime
 from typing import Optional, List
 from urllib.parse import urlparse
@@ -134,7 +135,8 @@ async def get_all_articles():
                 c.article,
                 c.comments,
                 a.article_summary,
-                a.comments_summary
+                a.comments_summary,
+                a.scores
             FROM links l
             LEFT JOIN contents c ON l.id = c.link_id
             LEFT JOIN analysis a ON c.id = a.content_id
@@ -163,7 +165,8 @@ async def get_article_by_id(article_id: str):
                 c.article,
                 c.comments,
                 a.article_summary,
-                a.comments_summary
+                a.comments_summary,
+                a.scores
             FROM links l
             LEFT JOIN contents c ON l.id = c.link_id
             LEFT JOIN analysis a ON c.id = a.content_id
@@ -251,34 +254,44 @@ def extract_domain(url: str) -> str:
         return "news.ycombinator.com"
 
 
-def generate_mock_scores(title: str, user_topics: List[str]) -> dict:
-    """Generate mock relevance, trustworthiness, and controversy scores."""
-    # Calculate relevance based on topic matching (simple keyword match)
-    relevance = 2.0  # Base relevance
-    title_lower = title.lower()
+def parse_scores_from_json(scores_json: Optional[str]) -> dict:
+    """Parse scores from JSON field and return individual score values."""
+    # Default scores (all 0.0)
+    default_scores = {
+        "controversial": 0.0,
+        "trustworthy": 0.0,
+        "sentiment": 0.0,
+    }
 
-    # Get category keywords from user's selected topics
-    category_keywords = []
-    for slug, cat_title, cat_desc in CATEGORIES:
-        if slug in user_topics:
-            # Extract keywords from category title and description
-            keywords = cat_title.lower().split() + cat_desc.lower().split()
-            category_keywords.extend([k.strip(",.()") for k in keywords if len(k) > 3])
+    # If no scores data, return defaults
+    if not scores_json:
+        return default_scores
 
-    # Check if any keywords match the title
-    matches = sum(1 for keyword in category_keywords if keyword in title_lower)
-    relevance += min(matches * 0.5, 3.0)  # Cap at 5.0
+    try:
+        scores_data = json.loads(scores_json)
+        # Use .get() with default 0.0 for missing keys
+        return {
+            "controversial": scores_data.get("controversial", 0.0),
+            "trustworthy": scores_data.get("trustworthy", 0.0),
+            "sentiment": scores_data.get("sentiment", 0.0),
+        }
+    except (json.JSONDecodeError, AttributeError, TypeError):
+        # If JSON parsing fails, return defaults
+        return default_scores
 
-    # Generate realistic trustworthiness (3.0-4.5 range typically)
-    trustworthiness = random.uniform(3.0, 4.5)
 
-    # Generate controversy score (1.0-4.0 range, most articles are low controversy)
-    controversy = random.uniform(1.0, 4.0)
+def get_real_scores(scores_json: Optional[str], relevance_score: Optional[float]) -> dict:
+    """Get real scores from database analysis."""
+    # Parse scores from JSON field
+    parsed_scores = parse_scores_from_json(scores_json)
 
+    # Map database fields to API response format
+    # Use relevance_score from user_articles table (user-specific matching)
+    # Use trustworthy and controversial from analysis scores JSON
     return {
-        "relevanceScore": round(relevance, 1),
-        "trustworthinessScore": round(trustworthiness, 1),
-        "controversyScore": round(controversy, 1),
+        "relevanceScore": round(relevance_score or 0.0, 1),
+        "trustworthinessScore": round(parsed_scores["trustworthy"], 1),
+        "controversyScore": round(parsed_scores["controversial"], 1),
     }
 
 
@@ -286,7 +299,10 @@ def map_article_to_response(
     article_data: dict, user_topics: List[str]
 ) -> ArticleResponse:
     """Map database article to API response format."""
-    scores = generate_mock_scores(article_data["title"], user_topics)
+    # Get real scores from database
+    scores = get_real_scores(
+        article_data.get("scores"), article_data.get("relevance_score")
+    )
 
     # Use analysis summaries if available, otherwise provide placeholder
     article_summary = (
@@ -518,7 +534,9 @@ async def get_articles(
                 c.comments,
                 a.article_summary,
                 a.comments_summary,
-                ua.is_read
+                a.scores,
+                ua.is_read,
+                ua.relevance_score
             FROM user_articles ua
             JOIN links l ON ua.article_id = l.id
             LEFT JOIN contents c ON l.id = c.link_id
@@ -564,8 +582,10 @@ async def get_article(
                 c.comments,
                 a.article_summary,
                 a.comments_summary,
+                a.scores,
                 ua.id as user_article_id,
-                ua.is_read
+                ua.is_read,
+                ua.relevance_score
             FROM user_articles ua
             JOIN links l ON ua.article_id = l.id
             LEFT JOIN contents c ON l.id = c.link_id
