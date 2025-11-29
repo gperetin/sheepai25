@@ -9,7 +9,9 @@ dependencies = [
     "apify-client>=2.3.0",
     "fastapi>=0.122.0",
     "httpx>=0.28.1",
+    "pydantic[email]>=2.12.5",
     "python-dotenv>=1.2.1",
+    "uvicorn>=0.38.0",
 ]
 
 [tool.uv]
