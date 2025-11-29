@@ -23,10 +23,7 @@ import mail
 load_dotenv()
 
 # Configure logging
-basicConfig(
-    level=INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
+basicConfig(level=INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 log = getLogger(__name__)
 
 # Get configuration from environment
@@ -62,10 +59,10 @@ def get_users_with_unsent_articles() -> Dict[int, Dict[str, Any]]:
     cursor.execute(query)
     users = {}
     for row in cursor.fetchall():
-        users[row['id']] = {
-            'email': row['email'],
-            'categories': row['categories'],
-            'custom_description': row['custom_description']
+        users[row["id"]] = {
+            "email": row["email"],
+            "categories": row["categories"],
+            "custom_description": row["custom_description"],
         }
 
     conn.close()
@@ -127,13 +124,13 @@ def generate_html_email(user_email: str, articles: List[Dict[str, Any]]) -> str:
     # Build article cards HTML
     article_cards = []
     for article in articles:
-        title = article.get('title', 'Untitled Article')
-        url = article.get('url', '#')
-        hnlink = article.get('hnlink', '#')
-        article_id = article.get('article_id', 0)
-        relevance_score = article.get('relevance_score', 0)
-        matched_categories = article.get('matched_categories', '')
-        summary = article.get('article_summary', '')
+        title = article.get("title", "Untitled Article")
+        url = article.get("url", "#")
+        hnlink = article.get("hnlink", "#")
+        article_id = article.get("article_id", 0)
+        relevance_score = article.get("relevance_score", 0)
+        matched_categories = article.get("matched_categories", "")
+        summary = article.get("article_summary", "")
 
         # Format relevance score
         score_display = f"{relevance_score:.1f}" if relevance_score else "N/A"
@@ -141,20 +138,20 @@ def generate_html_email(user_email: str, articles: List[Dict[str, Any]]) -> str:
         # Format matched categories as tags
         categories_html = ""
         if matched_categories:
-            categories = matched_categories.split(',')
+            categories = matched_categories.split(",")
             category_tags = []
             for cat in categories[:3]:  # Show max 3 categories
-                cat_display = cat.strip().replace('-', ' ').title()
+                cat_display = cat.strip().replace("-", " ").title()
                 category_tags.append(
                     f'<span style="display: inline-block; background-color: #e8f4f8; color: #0066cc; '
-                    f'padding: 4px 8px; border-radius: 4px; font-size: 12px; margin-right: 4px; '
+                    f"padding: 4px 8px; border-radius: 4px; font-size: 12px; margin-right: 4px; "
                     f'margin-bottom: 4px;">{cat_display}</span>'
                 )
-            categories_html = ''.join(category_tags)
+            categories_html = "".join(category_tags)
 
         # Truncate summary if too long
         if summary and len(summary) > 300:
-            summary = summary[:297] + '...'
+            summary = summary[:297] + "..."
 
         # Build the article card
         article_link = f"{APP_BASE_URL}/article/{article_id}"
@@ -189,7 +186,7 @@ def generate_html_email(user_email: str, articles: List[Dict[str, Any]]) -> str:
         """
         article_cards.append(card_html)
 
-    articles_html = ''.join(article_cards)
+    articles_html = "".join(article_cards)
 
     # Complete email HTML
     html = f"""
@@ -257,7 +254,7 @@ def mark_articles_as_sent(user_article_ids: List[int]) -> None:
     cursor = conn.cursor()
 
     # Create placeholders for SQL IN clause
-    placeholders = ','.join('?' * len(user_article_ids))
+    placeholders = ",".join("?" * len(user_article_ids))
     query = f"UPDATE user_articles SET is_sent = 1 WHERE id IN ({placeholders})"
 
     cursor.execute(query, user_article_ids)
@@ -267,7 +264,9 @@ def mark_articles_as_sent(user_article_ids: List[int]) -> None:
     log.info(f"Marked {len(user_article_ids)} articles as sent")
 
 
-def send_digest_to_user(user_id: int, user_data: Dict[str, Any], articles: List[Dict[str, Any]]) -> bool:
+def send_digest_to_user(
+    user_id: int, user_data: Dict[str, Any], articles: List[Dict[str, Any]]
+) -> bool:
     """
     Send digest email to a single user.
 
@@ -279,7 +278,7 @@ def send_digest_to_user(user_id: int, user_data: Dict[str, Any], articles: List[
     Returns:
         True if email was sent successfully, False otherwise
     """
-    email = user_data['email']
+    email = user_data["email"]
 
     try:
         # Generate HTML content
@@ -290,14 +289,10 @@ def send_digest_to_user(user_id: int, user_data: Dict[str, Any], articles: List[
         subject = f"Your Daily Digest: {article_count} New Article{'s' if article_count != 1 else ''}"
 
         # Send email
-        mail.send(
-            recipient=email,
-            subject=subject,
-            content=html_content
-        )
+        mail.send(recipient=email, subject=subject, content=html_content)
 
         # Mark articles as sent
-        user_article_ids = [article['user_article_id'] for article in articles]
+        user_article_ids = [article["user_article_id"] for article in articles]
         mark_articles_as_sent(user_article_ids)
 
         log.info(f"Successfully sent digest to {email} with {article_count} articles")
@@ -328,7 +323,9 @@ def main():
         articles = get_unsent_articles_for_user(user_id)
 
         if not articles:
-            log.warning(f"No articles found for user {user_id} (email: {user_data['email']})")
+            log.warning(
+                f"No articles found for user {user_id} (email: {user_data['email']})"
+            )
             continue
 
         # Send digest
@@ -338,7 +335,9 @@ def main():
             failure_count += 1
 
     # Summary
-    log.info(f"Digest script completed. Success: {success_count}, Failures: {failure_count}")
+    log.info(
+        f"Digest script completed. Success: {success_count}, Failures: {failure_count}"
+    )
 
 
 if __name__ == "__main__":
